@@ -1,8 +1,15 @@
+extern mod extra;
+
 use std::{io, run, os, path};
+use extra::{deque};
+
+
 
 fn main() {
     static CMD_PROMPT: &'static str = "gash > ";
 	let HOME = os::homedir();
+	let mut history: extra::deque::Deque<~[~str]> = extra::deque::Deque::new();
+
 	println(fmt!("%?", HOME));
     
     loop {
@@ -14,12 +21,21 @@ fn main() {
         debug!(fmt!("argv %?", argv));
         
         if argv.len() > 0 {
+			history.add_front(argv.to_owned());
             let program = argv.remove(0);
             match program {
                 ~"exit"     => {return; }
 				~"cd"		=> { if !argv.is_empty() {cdpre(argv.remove(0)); }
 								 else { cd(~os::getcwd())} 
 							   }
+				~"history"	=> { let mut i = 1;
+								 for history.rev_iter().advance |s| {
+									print(fmt!("%i ",i));
+									for s.iter().advance |word| {print(*word + " ") }
+								 	println("");
+									i+=1;
+							   	 }
+								}
                 _           => {run::process_status(program, argv);}
             }
         }
