@@ -17,12 +17,21 @@ fn main() {
             let program = argv.remove(0);
             match program {
                 ~"exit"     => {return; }
-				~"cd"		=> { if !argv.is_empty() {cd(~path::Path(argv.remove(0))); }
+				~"cd"		=> { if !argv.is_empty() {cdpre(argv.remove(0)); }
 								 else { cd(~os::getcwd())} 
 							   }
                 _           => {run::process_status(program, argv);}
             }
         }
+    }
+}
+fn cdpre(s: ~str){
+    if s.starts_with("~"){
+        println("Go");
+        cd(~path::Path(s.slice(1, s.len()))); 
+    }
+    else{
+        cd(~path::Path(s)); 
     }
 }
 
