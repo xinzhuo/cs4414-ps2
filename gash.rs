@@ -1,6 +1,6 @@
 extern mod extra;
 
-use std::{io, run, os, path};
+use std::{io, run, os, path, task};
 use extra::{deque};
 
 
@@ -15,6 +15,7 @@ fn main() {
     loop {
         print(os::getcwd().to_str() + ": " + CMD_PROMPT);
         let line = io::stdin().read_line();
+		
         debug!(fmt!("line: %?", line));
         let mut argv: ~[~str] = line.split_iter(' ').filter(|&x| x != "")
                                  .transform(|x| x.to_owned()).collect();
@@ -36,7 +37,14 @@ fn main() {
 									i+=1;
 							   	 }
 								}
-                _           => {run::process_status(program, argv);}
+                _           => {if line.ends_with("&") {
+									let temp = argv;
+									task::spawn_sched(task::SingleThreaded, | | {
+										run::process_status(program, temp);
+									});
+								}
+								else{run::process_status(program, argv);}
+								}
             }
         }
     }
