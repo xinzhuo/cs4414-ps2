@@ -25,6 +25,8 @@ fn main() {
         }
     }
 }
+
+//CD Command
 fn cdpre(s: ~str){
     if s.starts_with("~"){
         println("Go");
@@ -46,3 +48,6 @@ fn cd(p: &Path) {
 		println(fmt!("gash: cd: %s: No such file or directory", p.to_str()));
 	}
 }
+
+//History Command
+
