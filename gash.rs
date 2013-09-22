@@ -22,7 +22,7 @@ fn main() {
         
         if argv.len() > 0 {
 			history.add_front(argv.to_owned());
-            let mut program = argv.remove(0);
+            let program = argv.remove(0);
             match program {
                 ~"exit"     => {return; }
 				~"cd"		=> { if !argv.is_empty() {cdpre(argv.remove(0)); }
@@ -36,10 +36,7 @@ fn main() {
 									i+=1;
 							   	 }
 								}
-                _           =>  {
-									if program.ends_with("&") { println("do in background")}					
-									//run::process_status(program, argv);
-								}
+                _           => {run::process_status(program, argv);}
             }
         }
     }
