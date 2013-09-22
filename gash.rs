@@ -1,10 +1,12 @@
-use std::{io, run};
+use std::{io, run, os, path};
 
 fn main() {
     static CMD_PROMPT: &'static str = "gash > ";
+	let HOME = os::homedir();
+	println(fmt!("%?", HOME));
     
     loop {
-        print(CMD_PROMPT);
+        print(os::getcwd().to_str() + ": " + CMD_PROMPT);
         let line = io::stdin().read_line();
         debug!(fmt!("line: %?", line));
         let mut argv: ~[~str] = line.split_iter(' ').filter(|&x| x != "")
@@ -15,8 +17,23 @@ fn main() {
             let program = argv.remove(0);
             match program {
                 ~"exit"     => {return; }
+				~"cd"		=> { if !argv.is_empty() {cd(~path::Path(argv.remove(0))); }
+								 else { cd(~os::getcwd())} 
+							   }
                 _           => {run::process_status(program, argv);}
             }
         }
     }
+}
+
+fn cd(p: &Path) {
+	let exists:bool = os::path_exists(p);
+	let isDir:bool = os::path_is_dir(p);
+	if exists && isDir{
+		os::change_dir(p);
+	} else if exists{
+		println(fmt!("gash: cd: %s: Not a directory", p.to_str()));
+	} else {
+		println(fmt!("gash: cd: %s: No such file or directory", p.to_str()));
+	}
 }
