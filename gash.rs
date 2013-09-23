@@ -4,11 +4,10 @@ use std::{io, run, os, path, task};
 use extra::{deque};
 
 
-
 fn main() {
     static CMD_PROMPT: &'static str = "gash > ";
 	let HOME = os::homedir();
-	let mut history: extra::deque::Deque<~[~str]> = extra::deque::Deque::new();
+	let mut history: @mut extra::deque::Deque<~[~str]> = @mut extra::deque::Deque::new();
 
 	println(fmt!("%?", HOME));
     
@@ -24,7 +23,16 @@ fn main() {
         if argv.len() > 0 {
 			history.add_front(argv.to_owned());
             let program = argv.remove(0);
-            match program {
+			run_program(program, argv, line.ends_with("&"), history);            
+        }
+    }
+}
+
+fn run_program(program: ~str, args: ~[~str], run_in_background: bool, history: @mut extra::deque::Deque<~[~str]>) {
+
+	let mut argv = args;
+
+	match program {
                 ~"exit"     => {return; }
 				~"cd"		=> { if !argv.is_empty() {cdpre(argv.remove(0)); }
 								 else { cd(~os::getcwd())} 
@@ -37,7 +45,7 @@ fn main() {
 									i+=1;
 							   	 }
 								}
-                _           => {if line.ends_with("&") {
+                _           => {if run_in_background {
 									let temp = argv;
 									task::spawn_sched(task::SingleThreaded, | | {
 										run::process_status(program, temp);
@@ -46,8 +54,7 @@ fn main() {
 								else{run::process_status(program, argv);}
 								}
             }
-        }
-    }
+
 }
 
 //CD Command
@@ -72,6 +79,4 @@ fn cd(p: &Path) {
 		println(fmt!("gash: cd: %s: No such file or directory", p.to_str()));
 	}
 }
-
-//History Command
 
