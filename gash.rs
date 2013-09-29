@@ -1,7 +1,7 @@
 extern mod extra;
 
 use std::{io, run, os, path, task};
-use extra::{deque};
+//use extra::{deque};
 
 static NORMAL:int = 0;
 static OUTPUT_REDIRECTION:int = 1;
@@ -45,19 +45,27 @@ fn run_program(program: ~str, args: ~[~str], run_in_background: bool, history: @
 							break; }
 			~">"		=> {println("Found redirect output");
 							argv.remove(0); 
-							argv_modes.push(OUTPUT_REDIRECTION); }
+							argv_modes.push(OUTPUT_REDIRECTION); 
+							if argv.len() > 0 { current_argv.push(argv.remove(0)); }
+							else{println("Syntax Error"); return;}
+							}
 			~">>"		=> {println("Found redirect output (append)");
 							argv.remove(0); 
-							argv_modes.push(OUTPUT_REDIRECTION_APPEND); }
+							argv_modes.push(OUTPUT_REDIRECTION_APPEND); 
+							if argv.len() > 0 { current_argv.push(argv.remove(0));}
+							else{println("Syntax Error"); return;}
+							}
 			~"<"		=> {println("Found redirect input");
 							argv.remove(0); 
-							argv_modes.push(INPUT_REDIRECTION);}
+							argv_modes.push(INPUT_REDIRECTION);
+							if argv.len() > 0 { current_argv.push(argv.remove(0));}
+							else{println("Syntax Error"); return;}
+							}
 			_			=> {current_argv.push(argv.remove(0));
 							argv_modes.push(NORMAL); }
 		}
 		println(fmt!("%? \n %?", argv, current_argv));		
  	} }
-
 
 	match program {
                 ~"exit"     => {return; }
@@ -72,13 +80,27 @@ fn run_program(program: ~str, args: ~[~str], run_in_background: bool, history: @
 									i+=1;
 							   	 }
 								}
-                _           => {if run_in_background {
+                _           => {
+								let mut i = 0;
+								let mut inputfile = ~"";
+								let mut outputfile = ~"";
+								unsafe { for argv_modes.iter().advance |mode| {
+									if *mode == INPUT_REDIRECTION {
+										inputfile = current_argv.unsafe_get(i);						
+									}
+									if *mode == OUTPUT_REDIRECTION {
+										outputfile = current_argv.unsafe_get(i);
+									}
+									i += 1;
+								} }
+								 
+								if run_in_background {
 									let temp = current_argv;
 									task::spawn_sched(task::SingleThreaded, | | {
 										run::process_status(program, temp);
 									});
 								}
-								else{run::process_status(program, current_argv);}
+								else{let output = run::process_output(program, current_argv);}
 								}
             }
 	if argv.len() > 0 {
@@ -106,4 +128,14 @@ fn cd(p: &Path) {
 	} else {
 		println(fmt!("gash: cd: %s: No such file or directory", p.to_str()));
 	}
+}
+
+fn load(filename: ~str) -> ~[~str] {
+	let read_result = io::file_reader(~path::Path(filename));
+	if read_result.is_ok() {
+		let file = read_result.unwrap();
+		return file.read_lines();
+	}
+	println(fmt!("Error reading file: %?", read_result.unwrap_err()));
+	return ~[];
 }
