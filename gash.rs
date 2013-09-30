@@ -1,6 +1,6 @@
 extern mod extra;
 
-use std::{io, run, os, path, task};
+use std::{io, run, os, path, task, int};
 //use extra::{deque};
 
 static NORMAL:int = 0;
@@ -63,23 +63,48 @@ fn run_program(args: ~[~str], run_in_background: bool, history: @mut extra::dequ
 		assert!(current_argv.len() == argv_modes.len());
 		let mut i= 0;
 		let mut writefile = ~"";
+		let mut readfile = ~"";
 		while i < argv_modes.len() {
 			if argv_modes[i] == OUTPUT_REDIRECTION {
 				writefile = current_argv.remove(i);
 				argv_modes.remove(i);
 			}
 			else if argv_modes[i] == INPUT_REDIRECTION {
-				i+=1;
+				readfile = current_argv.remove(i);
+				argv_modes.remove(i);
 			}
 			else { i+=1; }
 		}
 		
-		let mut pipe_input;
 		match program {
                 ~"exit"     => {return; }
 				~"cd"		=> { if !argv.is_empty() {pre_cd(current_argv.remove(0)); }
 								 else { cd(~os::getcwd())} 
 							   }
+				~"add"		=> { if !current_argv.len() >= 2 {
+									let result = int::from_str(current_argv.remove(0)) + int::from_str(current_argv.remove(0));
+									match result {
+										Some(ref x) => println(fmt!("%i",*x)),
+										None => ()
+									}
+								 } 
+								}
+				~"sub"		=> { if !current_argv.len() >= 2 {
+									let result = int::from_str(current_argv.remove(0)).get() - int::from_str(current_argv.remove(0)).get();
+									println(fmt!("%i",result));
+									
+								 } 
+								}
+				~"mul"		=> { if !current_argv.len() >= 2 {
+									let result = int::from_str(current_argv.remove(0)).get() * int::from_str(current_argv.remove(0)).get();
+									println(fmt!("%i",result));
+								 } 
+								}
+				~"div"		=> { if !current_argv.len() >= 2 {
+									let result = int::from_str(current_argv.remove(0)).get() / int::from_str(current_argv.remove(0)).get();
+									println(fmt!("%i",result));
+								 } 
+								}
 				~"history"	=> { let mut i = 1;
 								 for history.rev_iter().advance |s| {
 									print(fmt!("%i ",i));
@@ -91,6 +116,7 @@ fn run_program(args: ~[~str], run_in_background: bool, history: @mut extra::dequ
                 _           => {								 
 								if run_in_background {
 									let temp = current_argv;
+									
 									if writefile == ~"" {
 									task::spawn_sched(task::SingleThreaded, | | {
 										run::process_status(program, temp);
@@ -107,17 +133,25 @@ fn run_program(args: ~[~str], run_in_background: bool, history: @mut extra::dequ
 										} } ); 	
 									}
 								}
-								else{ if writefile == ~"" {run::process_status(program, current_argv);} 
+								else{ 
+										if readfile == ~"" {
+											//let input_reader = run::input();
+										}
+										if writefile == ~"" {run::process_status(program, current_argv);} 
 										else {
 										let write_result = io::buffered_file_writer(~path::Path(writefile));
 										if write_result.is_ok() {
 											let file = write_result.unwrap();
-											let printout = run::process_output(program, current_argv);
-											file.write(printout.output);
+											let printout = run::process_output(program, current_argv);								if !pipe {
+											file.write(printout.output); }
+											else { argv.insert(1, printout.output.to_str());}
 										}	
 									}
 								} }
             }
+		if pipe {
+			run_program(argv, run_in_background, history);
+		}
 
 	}
 }
