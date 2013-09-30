@@ -5,7 +5,6 @@ use std::{io, run, os, path, task};
 
 static NORMAL:int = 0;
 static OUTPUT_REDIRECTION:int = 1;
-static OUTPUT_REDIRECTION_APPEND:int = 2;
 static INPUT_REDIRECTION:int = 3;
 static PIPELINE:int = 4; 
 
@@ -18,58 +17,67 @@ fn main() {
         let line = io::stdin().read_line();
 		
         debug!(fmt!("line: %?", line));
-        let mut argv: ~[~str] = line.split_iter(' ').filter(|&x| x != "")
+        let argv: ~[~str] = line.split_iter(' ').filter(|&x| x != "")
                                  .transform(|x| x.to_owned()).collect();
         debug!(fmt!("argv %?", argv));
         
         if argv.len() > 0 {
 			history.add_front(argv.to_owned());
-            let program = argv.remove(0);
-			run_program(program, argv, line.ends_with("&"), history);            
+			run_program(argv, line.ends_with("&"), history);            
         }
     }
 }
 
-fn run_program(program: ~str, args: ~[~str], run_in_background: bool, history: @mut extra::deque::Deque<~[~str]>) {
-
+fn run_program(args: ~[~str], run_in_background: bool, history: @mut extra::deque::Deque<~[~str]>) {
 	let mut argv = args;
 	let mut current_argv = ~[];
 	let mut argv_modes = ~[];
+	let mut pipe = false;
 
-	unsafe {while argv.len() > 0 {
-		let temp2 = argv.unsafe_get(0);
-		match temp2 {
-			~"|"		=> {println("Found a pipe");
-							argv.remove(0);
-							argv_modes.push(PIPELINE);
-							break; }
-			~">"		=> {println("Found redirect output");
-							argv.remove(0); 
-							argv_modes.push(OUTPUT_REDIRECTION); 
-							if argv.len() > 0 { current_argv.push(argv.remove(0)); }
-							else{println("Syntax Error"); return;}
-							}
-			~">>"		=> {println("Found redirect output (append)");
-							argv.remove(0); 
-							argv_modes.push(OUTPUT_REDIRECTION_APPEND); 
-							if argv.len() > 0 { current_argv.push(argv.remove(0));}
-							else{println("Syntax Error"); return;}
-							}
-			~"<"		=> {println("Found redirect input");
-							argv.remove(0); 
-							argv_modes.push(INPUT_REDIRECTION);
-							if argv.len() > 0 { current_argv.push(argv.remove(0));}
-							else{println("Syntax Error"); return;}
-							}
-			_			=> {current_argv.push(argv.remove(0));
-							argv_modes.push(NORMAL); }
+	if argv.len() > 0 {
+		let program = argv.remove(0);
+		unsafe {while argv.len() > 0 {
+			let sig = argv.unsafe_get(0);
+			match sig {
+				~"|"		=> {println("Found a pipe");
+								argv.remove(0);
+								pipe=true;
+								break; }
+				~">"		=> {println("Found redirect output");
+								argv.remove(0); 
+								argv_modes.push(OUTPUT_REDIRECTION); 
+								if argv.len() > 0 { current_argv.push(argv.remove(0)); }
+								else{println("Syntax Error"); return;}
+								}
+				~"<"		=> {println("Found redirect input");
+								argv.remove(0); 
+								argv_modes.push(INPUT_REDIRECTION);
+								if argv.len() > 0 { current_argv.push(argv.remove(0));}
+								else{println("Syntax Error"); return;}
+								}
+				_			=> {current_argv.push(argv.remove(0));
+								argv_modes.push(NORMAL); }
+			}
+			println(fmt!("%? \n %?", argv, current_argv));		
+	 	} }
+		assert!(current_argv.len() == argv_modes.len());
+		let mut i= 0;
+		let mut writefile = ~"";
+		while i < argv_modes.len() {
+			if argv_modes[i] == OUTPUT_REDIRECTION {
+				writefile = current_argv.remove(i);
+				argv_modes.remove(i);
+			}
+			else if argv_modes[i] == INPUT_REDIRECTION {
+				i+=1;
+			}
+			else { i+=1; }
 		}
-		println(fmt!("%? \n %?", argv, current_argv));		
- 	} }
-
-	match program {
+		
+		let mut pipe_input;
+		match program {
                 ~"exit"     => {return; }
-				~"cd"		=> { if !current_argv.is_empty() {pre_cd(current_argv.remove(0)); }
+				~"cd"		=> { if !argv.is_empty() {pre_cd(current_argv.remove(0)); }
 								 else { cd(~os::getcwd())} 
 							   }
 				~"history"	=> { let mut i = 1;
@@ -80,31 +88,37 @@ fn run_program(program: ~str, args: ~[~str], run_in_background: bool, history: @
 									i+=1;
 							   	 }
 								}
-                _           => {
-								let mut i = 0;
-								let mut inputfile = ~"";
-								let mut outputfile = ~"";
-								unsafe { for argv_modes.iter().advance |mode| {
-									if *mode == INPUT_REDIRECTION {
-										inputfile = current_argv.unsafe_get(i);						
-									}
-									if *mode == OUTPUT_REDIRECTION {
-										outputfile = current_argv.unsafe_get(i);
-									}
-									i += 1;
-								} }
-								 
+                _           => {								 
 								if run_in_background {
 									let temp = current_argv;
+									if writefile == ~"" {
 									task::spawn_sched(task::SingleThreaded, | | {
 										run::process_status(program, temp);
-									});
+									}); }
+									else {
+									let w = writefile;
+									task::spawn_sched(task::SingleThreaded, | | {
+										let write_result = io::buffered_file_writer(~path::Path(w));
+										if write_result.is_ok() {
+
+											let file = write_result.unwrap();
+											let printout = run::process_output(program, temp);
+											file.write(printout.output);
+										} } ); 	
+									}
 								}
-								else{let output = run::process_output(program, current_argv);}
-								}
+								else{ if writefile == ~"" {run::process_status(program, current_argv);} 
+										else {
+										let write_result = io::buffered_file_writer(~path::Path(writefile));
+										if write_result.is_ok() {
+											let file = write_result.unwrap();
+											let printout = run::process_output(program, current_argv);
+											file.write(printout.output);
+										}	
+									}
+								} }
             }
-	if argv.len() > 0 {
-		run_program(argv.remove(0), argv, run_in_background, history);
+
 	}
 }
 
