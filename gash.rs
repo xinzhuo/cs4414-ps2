@@ -78,7 +78,7 @@ fn run_program(args: ~[~str], run_in_background: bool, history: @mut extra::dequ
 		
 		match program {
                 ~"exit"     => {return; }
-				~"cd"		=> { if !argv.is_empty() {pre_cd(current_argv.remove(0)); }
+				~"cd"		=> { if !current_argv.is_empty() {pre_cd(current_argv.remove(0)); }
 								 else { cd(~os::getcwd())} 
 							   }
 				~"add"		=> { if !current_argv.len() >= 2 {
