@@ -1,6 +1,6 @@
 extern mod extra;
 
-use std::{io, run, os, path, task, int};
+use std::{io, run, os, path, task, int, str};
 //use extra::{deque};
 
 static NORMAL:int = 0;
@@ -137,7 +137,7 @@ fn run_program(args: ~[~str], run_in_background: bool, history: @mut extra::dequ
 										if readfile == ~"" {
 											//let input_reader = run::input();
 										}
-										if writefile == ~"" {run::process_status(program, current_argv);} 
+										if writefile == ~"" {let printout = run::process_output(program, current_argv); println(str::from_bytes(printout.output));} 
 										else {
 										let write_result = io::buffered_file_writer(~path::Path(writefile));
 										if write_result.is_ok() {
