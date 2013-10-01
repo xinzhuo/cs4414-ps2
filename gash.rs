@@ -1,10 +1,11 @@
 extern mod extra;
 
-use std::{io, run, os, path, task, int, str};
+use std::{io, run, os, path, task, int, str, libc};
 //use extra::{deque};
 
 static NORMAL:int = 0;
 static OUTPUT_REDIRECTION:int = 1;
+static OUTPUT_REDIRECTION_APPEND:int = 2;
 static INPUT_REDIRECTION:int = 3;
 static PIPELINE:int = 4; 
 
@@ -34,33 +35,43 @@ fn run_program(args: ~[~str], run_in_background: bool, history: @mut extra::dequ
 	let mut argv_modes = ~[];
 	let mut pipe = false;
 
+	//Determine role of each parameter
 	if argv.len() > 0 {
 		let program = argv.remove(0);
-		unsafe {while argv.len() > 0 {
+		unsafe { while argv.len() > 0 {
 			let sig = argv.unsafe_get(0);
 			match sig {
-				~"|"		=> {println("Found a pipe");
+				~"|"	=>	{
+								println("Found a pipe");
 								argv.remove(0);
 								pipe=true;
-								break; }
-				~">"		=> {println("Found redirect output");
+								break; 
+							}
+				~">"	=>	{
+								println("Found redirect output");
 								argv.remove(0); 
 								argv_modes.push(OUTPUT_REDIRECTION); 
 								if argv.len() > 0 { current_argv.push(argv.remove(0)); }
 								else{println("Syntax Error"); return;}
-								}
-				~"<"		=> {println("Found redirect input");
+							}
+				~"<"	=>	{
+								println("Found redirect input");
 								argv.remove(0); 
 								argv_modes.push(INPUT_REDIRECTION);
 								if argv.len() > 0 { current_argv.push(argv.remove(0));}
 								else{println("Syntax Error"); return;}
-								}
-				_			=> {current_argv.push(argv.remove(0));
-								argv_modes.push(NORMAL); }
+							}
+				_		=>	{
+								current_argv.push(argv.remove(0));
+								argv_modes.push(NORMAL); 
+							}
 			}
-			println(fmt!("%? \n %?", argv, current_argv));		
+				
 	 	} }
+	println(fmt!("argv: %? \n current_argv: %? \n modes: %?", argv, current_argv, argv_modes));			
 		assert!(current_argv.len() == argv_modes.len());
+		
+		//Get Read and Write files
 		let mut i= 0;
 		let mut writefile = ~"";
 		let mut readfile = ~"";
@@ -77,78 +88,121 @@ fn run_program(args: ~[~str], run_in_background: bool, history: @mut extra::dequ
 		}
 		
 		match program {
-                ~"exit"     => {return; }
-				~"cd"		=> { if !current_argv.is_empty() {pre_cd(current_argv.remove(0)); }
-								 else { cd(~os::getcwd())} 
-							   }
-				~"add"		=> { if !current_argv.len() >= 2 {
-									let result = int::from_str(current_argv.remove(0)) + int::from_str(current_argv.remove(0));
-									match result {
-										Some(ref x) => println(fmt!("%i",*x)),
-										None => ()
-									}
-								 } 
-								}
-				~"sub"		=> { if !current_argv.len() >= 2 {
-									let result = int::from_str(current_argv.remove(0)).get() - int::from_str(current_argv.remove(0)).get();
-									println(fmt!("%i",result));
-									
-								 } 
-								}
-				~"mul"		=> { if !current_argv.len() >= 2 {
-									let result = int::from_str(current_argv.remove(0)).get() * int::from_str(current_argv.remove(0)).get();
-									println(fmt!("%i",result));
-								 } 
-								}
-				~"div"		=> { if !current_argv.len() >= 2 {
-									let result = int::from_str(current_argv.remove(0)).get() / int::from_str(current_argv.remove(0)).get();
-									println(fmt!("%i",result));
-								 } 
-								}
-				~"history"	=> { let mut i = 1;
-								 for history.rev_iter().advance |s| {
-									print(fmt!("%i ",i));
-									for s.iter().advance |word| {print(*word + " ") }
-								 	println("");
-									i+=1;
-							   	 }
-								}
-                _           => {								 
-								if run_in_background {
-									let temp = current_argv;
-									
-									if writefile == ~"" {
-									task::spawn_sched(task::SingleThreaded, | | {
-										run::process_status(program, temp);
-									}); }
-									else {
-									let w = writefile;
-									task::spawn_sched(task::SingleThreaded, | | {
-										let write_result = io::buffered_file_writer(~path::Path(w));
-										if write_result.is_ok() {
+			~"exit"		=>	{ return; }
 
-											let file = write_result.unwrap();
-											let printout = run::process_output(program, temp);
-											file.write(printout.output);
-										} } ); 	
+			~"cd"		=>	{ 
+								if !current_argv.is_empty() {
+									pre_cd(current_argv.remove(0)); 
+								}
+								else { 
+									cd(~os::getcwd())
+								} 
+							}
+
+			~"add"		=>	{ 
+								if !current_argv.len() >= 2 {
+									let result = int::from_str(current_argv.remove(0)).get() 
+										+ int::from_str(current_argv.remove(0)).get();
+									println(fmt!("%i", result));
+								}
+							}
+			
+			~"sub"		=>	{
+								if !current_argv.len() >= 2 {
+									let result = int::from_str(current_argv.remove(0)).get() 
+										- int::from_str(current_argv.remove(0)).get();
+									println(fmt!("%i",result));							
+								} 
+							}
+
+			~"mul"		=>	{
+								if !current_argv.len() >= 2 {
+									let result = int::from_str(current_argv.remove(0)).get() 
+										* int::from_str(current_argv.remove(0)).get();
+									println(fmt!("%i",result));							
+								} 
+							}
+
+			~"div"		=>	{
+								if !current_argv.len() >= 2 {
+									let result = int::from_str(current_argv.remove(0)).get() 
+										- int::from_str(current_argv.remove(0)).get();
+									println(fmt!("%i",result));							
+								} 
+							}
+
+			~"history"	=>	{
+								let mut i = 1;
+								for history.rev_iter().advance |s| {
+									print(fmt!("%i ",i));
+									for s.iter().advance |word| {
+										print(*word + " ") 
+									}
+							 		println("");
+									i+=1;
+						   	 	}	
+							}		
+			_           =>	{					
+								let temp = current_argv;
+								let r = readfile;
+								let w = writefile;		 
+								let mut process_options = ~run::ProcessOptions::new();
+								//Default stdin, stdout, stderr
+								process_options.in_fd = Some(0);
+								process_options.out_fd = Some(1);								
+								process_options.err_fd = Some(2);
+									
+								unsafe {
+									if w != ~"" {
+										let fp = std::libc::fopen(
+											w.as_c_str(|x| x),
+											"w".as_c_str(|x| x));
+										process_options.out_fd = Some(libc::fileno(fp));
+									}
+									if r != ~"" {	
+										if os::path_exists(~path::Path(r)) {
+											let fp = std::libc::fopen(
+												r.as_c_str(|x| x),
+												"r".as_c_str(|x| x));
+											process_options.in_fd = Some(libc::fileno(fp));
+										}
 									}
 								}
-								else{ 
-										if readfile == ~"" {
-											//let input_reader = run::input();
-										}
-										if writefile == ~"" {let printout = run::process_output(program, current_argv); println(str::from_bytes(printout.output));} 
-										else {
-										let write_result = io::buffered_file_writer(~path::Path(writefile));
-										if write_result.is_ok() {
-											let file = write_result.unwrap();
-											let printout = run::process_output(program, current_argv);								if !pipe {
-											file.write(printout.output); }
-											else { argv.insert(1, printout.output.to_str());}
-										}	
+								println(fmt!("%?", process_options));						
+								if pipe {
+									unsafe {
 									}
-								} }
-            }
+								}
+								if run_in_background {
+									task::spawn_sched(task::SingleThreaded, | | {
+										let mut process_options = ~run::ProcessOptions::new();
+										process_options.in_fd = Some(0);
+										process_options.out_fd = Some(1);
+										process_options.err_fd = Some(2);						
+										unsafe {
+											if w != ~"" {
+												let fp = std::libc::fopen(
+													w.as_c_str(|x| x),
+													"w".as_c_str(|x| x));
+												process_options.out_fd = Some(libc::fileno(fp));
+											}
+											if r != ~"" {	
+												if os::path_exists(~path::Path(r)) {
+													let fp = std::libc::fopen(
+														r.as_c_str(|x| x),
+														"r".as_c_str(|x| x));
+													process_options.in_fd = Some(libc::fileno(fp));
+												}
+											}
+										}
+										run::Process::new(program, temp, *process_options);
+									});
+								}								
+								else { 
+									run::Process::new(program, temp, *process_options);
+								} 
+							}
+		}
 		if pipe {
 			run_program(argv, run_in_background, history);
 		}
@@ -157,33 +211,15 @@ fn run_program(args: ~[~str], run_in_background: bool, history: @mut extra::dequ
 }
 
 fn pre_cd(s: ~str){
-    if s.starts_with("~"){
-        println("Go");
-        cd(~path::Path(s.slice(1, s.len()))); 
-    }
-    else{
-        cd(~path::Path(s)); 
-    }
+    if s.starts_with("~"){ cd(~path::Path(s.slice(1, s.len())));  }
+    else{ cd(~path::Path(s)); }
 }
 
 fn cd(p: &Path) {
 	let exists:bool = os::path_exists(p);
 	let is_dir:bool = os::path_is_dir(p);
-	if exists && is_dir{
-		os::change_dir(p);
-	} else if exists{
-		println(fmt!("gash: cd: %s: Not a directory", p.to_str()));
-	} else {
-		println(fmt!("gash: cd: %s: No such file or directory", p.to_str()));
-	}
+	if exists && is_dir{ os::change_dir(p); }
+	else if exists{ println(fmt!("gash: cd: %s: Not a directory", p.to_str()));	} 
+	else { println(fmt!("gash: cd: %s: No such file or directory", p.to_str())); }
 }
 
-fn load(filename: ~str) -> ~[~str] {
-	let read_result = io::file_reader(~path::Path(filename));
-	if read_result.is_ok() {
-		let file = read_result.unwrap();
-		return file.read_lines();
-	}
-	println(fmt!("Error reading file: %?", read_result.unwrap_err()));
-	return ~[];
-}
