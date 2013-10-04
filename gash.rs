@@ -23,8 +23,8 @@ fn main() {
         debug!(fmt!("argv %?", argv));
         
         if argv.len() > 0 {
-			history.add_front(argv.to_owned());
-			run_program(argv, line.ends_with("&"), history);            
+			run_program(argv.to_owned(), line.ends_with("&"), history);            
+			history.add_front(argv);
         }
     }
 }
@@ -34,6 +34,7 @@ fn run_program(args: ~[~str], run_in_background: bool, history: @mut extra::dequ
 	let mut current_argv = ~[];
 	let mut argv_modes = ~[];
 	let mut pipe = false;
+	let mut pipe_program = ~"";
 
 	//Determine role of each parameter
 	if argv.len() > 0 {
@@ -42,20 +43,20 @@ fn run_program(args: ~[~str], run_in_background: bool, history: @mut extra::dequ
 			let sig = argv.unsafe_get(0);
 			match sig {
 				~"|"	=>	{
-								println("Found a pipe");
+								//println("Found a pipe");
 								argv.remove(0);
 								pipe=true;
 								break; 
 							}
 				~">"	=>	{
-								println("Found redirect output");
+								//println("Found redirect output");
 								argv.remove(0); 
 								argv_modes.push(OUTPUT_REDIRECTION); 
 								if argv.len() > 0 { current_argv.push(argv.remove(0)); }
 								else{println("Syntax Error"); return;}
 							}
 				~"<"	=>	{
-								println("Found redirect input");
+								//println("Found redirect input");
 								argv.remove(0); 
 								argv_modes.push(INPUT_REDIRECTION);
 								if argv.len() > 0 { current_argv.push(argv.remove(0));}
@@ -68,7 +69,7 @@ fn run_program(args: ~[~str], run_in_background: bool, history: @mut extra::dequ
 			}
 				
 	 	} }
-	println(fmt!("argv: %? \n current_argv: %? \n modes: %?", argv, current_argv, argv_modes));			
+	//println(fmt!("argv: %? \n current_argv: %? \n modes: %?", argv, current_argv, argv_modes));			
 		assert!(current_argv.len() == argv_modes.len());
 		
 		//Get Read and Write files
@@ -131,6 +132,23 @@ fn run_program(args: ~[~str], run_in_background: bool, history: @mut extra::dequ
 								} 
 							}
 
+			~"search"	=>	{
+								let matcher = current_argv.remove(0);
+								let mut found = false;
+								for history.rev_iter().advance|s| {
+									for s.iter().advance |word| {
+										if word.contains(matcher) {
+											for s.iter().advance |pword| {print(*pword + " ") }
+											found = true;
+											println("");
+										}									
+									}
+								}
+								if !found {
+									println("No Match Found");
+								}
+							}
+
 			~"history"	=>	{
 								let mut i = 1;
 								for history.rev_iter().advance |s| {
@@ -167,12 +185,10 @@ fn run_program(args: ~[~str], run_in_background: bool, history: @mut extra::dequ
 											process_options.in_fd = Some(libc::fileno(fp));
 										}
 									}
+									
 								}
-								println(fmt!("%?", process_options));						
-								if pipe {
-									unsafe {
-									}
-								}
+								//println(fmt!("%?", process_options));						
+								
 								if run_in_background {
 									task::spawn_sched(task::SingleThreaded, | | {
 										let mut process_options = ~run::ProcessOptions::new();
